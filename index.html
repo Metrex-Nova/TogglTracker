@@ -159,6 +159,7 @@
             color: #4fc3f7;
             vertical-align: top;
             padding-top: 12px;
+            white-space: nowrap;
         }
 
         .activity-cell {
@@ -275,6 +276,32 @@
             font-size: 12px;
         }
 
+        .time-navigation {
+            position: sticky;
+            top: 40px;
+            background: #111;
+            padding: 10px;
+            z-index: 5;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .time-jump-btn {
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .time-jump-btn:hover {
+            background: #444;
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             .date-controls {
@@ -301,7 +328,16 @@
             
             textarea {
                 min-height: 80px;
-                font-size: 16px; /* Better for mobile typing */
+                font-size: 16px;
+            }
+            
+            .time-cell {
+                width: 70px;
+                font-size: 12px;
+            }
+            
+            .activity-cell {
+                width: calc(100% - 70px);
             }
         }
 
@@ -311,18 +347,30 @@
             }
             
             .time-cell {
-                width: 80px;
-                font-size: 14px;
+                width: 60px;
+                font-size: 11px;
             }
             
             .activity-cell {
-                width: calc(100% - 80px);
+                width: calc(100% - 60px);
             }
         }
 
         /* Scroll position preservation */
         .tracking-area {
             scroll-behavior: smooth;
+        }
+
+        .copy-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            display: none;
+            z-index: 1000;
         }
     </style>
 </head>
@@ -385,6 +433,9 @@
         </div>
     </div>
 
+    <!-- Status message -->
+    <div class="copy-status" id="copyStatus"></div>
+
     <!-- Include jsPDF library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
@@ -394,6 +445,8 @@
         let activities = {};
         let scrollPosition = 0;
         let currentCalendarMonth = new Date();
+        let lastCopiedText = '';
+        let currentFocusIndex = 0;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -433,7 +486,7 @@
             document.getElementById('monthPdfBtn').addEventListener('click', generateMonthPDF);
             
             // Start day button
-            document.getElementById('startDayBtn').addEventListener('click', startNewDay);
+            document.getElementById('startDayBtn').addEventListener('click', createFullDayTable);
             
             // Calendar controls
             document.getElementById('closeCalendarBtn').addEventListener('click', closeCalendar);
@@ -450,6 +503,16 @@
             document.addEventListener('input', function(e) {
                 if (e.target.classList.contains('activity-input')) {
                     saveActivity(e.target);
+                }
+            });
+            
+            // Track focus for copy operations
+            document.addEventListener('focusin', function(e) {
+                if (e.target.classList.contains('activity-input')) {
+                    const index = parseInt(e.target.dataset.index);
+                    if (!isNaN(index)) {
+                        currentFocusIndex = index;
+                    }
                 }
             });
         }
@@ -480,6 +543,45 @@
             document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('en-US', options);
         }
 
+        // Create full day table with 288 rows (5-minute intervals)
+        function createFullDayTable() {
+            const dateKey = formatDateKey(currentDate);
+            
+            // Initialize empty activities for this date
+            if (!activities[dateKey]) {
+                activities[dateKey] = {};
+            }
+            
+            // Generate all 5-minute intervals for the day
+            const timeSlots = generateAllTimeSlots();
+            
+            // Ensure all time slots exist in activities
+            timeSlots.forEach(timeSlot => {
+                if (!activities[dateKey][timeSlot]) {
+                    activities[dateKey][timeSlot] = "";
+                }
+            });
+            
+            saveData();
+            renderActivities();
+            
+            // Focus on current time slot
+            focusCurrentTimeSlot();
+        }
+
+        // Generate all 5-minute time slots for a day
+        function generateAllTimeSlots() {
+            const slots = [];
+            for (let hour = 0; hour < 24; hour++) {
+                for (let minute = 0; minute < 60; minute += 5) {
+                    const hourStr = hour.toString().padStart(2, '0');
+                    const minuteStr = minute.toString().padStart(2, '0');
+                    slots.push(`${hourStr}:${minuteStr}`);
+                }
+            }
+            return slots;
+        }
+
         // Render activities for current date
         function renderActivities() {
             const dateKey = formatDateKey(currentDate);
@@ -493,27 +595,39 @@
                         <button class="start-day-btn" id="startDayBtn">Start Tracking Day</button>
                     </div>
                 `;
-                document.getElementById('startDayBtn').addEventListener('click', startNewDay);
+                document.getElementById('startDayBtn').addEventListener('click', createFullDayTable);
                 return;
             }
             
-            // Get sorted timestamps
-            const timestamps = Object.keys(dateActivities).sort();
+            // Get all time slots in order
+            const timeSlots = generateAllTimeSlots();
             
-            let html = '<div class="table-container"><table>';
+            let html = '<div class="table-container">';
+            html += '<div class="time-navigation">';
+            html += '<span>Jump to:</span>';
+            html += '<button class="time-jump-btn" data-time="00:00">Midnight</button>';
+            html += '<button class="time-jump-btn" data-time="06:00">6 AM</button>';
+            html += '<button class="time-jump-btn" data-time="09:00">9 AM</button>';
+            html += '<button class="time-jump-btn" data-time="12:00">Noon</button>';
+            html += '<button class="time-jump-btn" data-time="15:00">3 PM</button>';
+            html += '<button class="time-jump-btn" data-time="18:00">6 PM</button>';
+            html += '<button class="time-jump-btn" data-time="21:00">9 PM</button>';
+            html += '</div>';
+            html += '<table>';
             html += '<thead><tr><th>Time</th><th>Activity</th></tr></thead><tbody>';
             
-            timestamps.forEach((timestamp, index) => {
-                const activity = dateActivities[timestamp];
+            timeSlots.forEach((timeSlot, index) => {
+                const activity = dateActivities[timeSlot] || "";
                 html += `
                     <tr>
-                        <td class="time-cell">${formatTimeDisplay(timestamp)}</td>
+                        <td class="time-cell">${timeSlot}</td>
                         <td class="activity-cell">
                             <textarea 
                                 class="activity-input" 
                                 data-date="${dateKey}" 
-                                data-time="${timestamp}"
-                                placeholder="What did you do?"
+                                data-time="${timeSlot}"
+                                data-index="${index}"
+                                placeholder="What did you do at ${timeSlot}?"
                             >${activity}</textarea>
                         </td>
                     </tr>
@@ -523,42 +637,62 @@
             html += '</tbody></table></div>';
             container.innerHTML = html;
             
-            // Focus on first textarea
-            const firstTextarea = container.querySelector('textarea');
-            if (firstTextarea) {
-                firstTextarea.focus();
-            }
-            
-            // Add event listeners to new textareas
-            document.querySelectorAll('.activity-input').forEach(textarea => {
+            // Add event listeners to textareas
+            document.querySelectorAll('.activity-input').forEach((textarea, index) => {
                 textarea.addEventListener('input', function() {
                     saveActivity(this);
                 });
+                
+                textarea.addEventListener('focus', function() {
+                    currentFocusIndex = index;
+                });
             });
+            
+            // Add event listeners to time jump buttons
+            document.querySelectorAll('.time-jump-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const time = this.dataset.time;
+                    jumpToTime(time);
+                });
+            });
+            
+            // Focus on current time slot or first textarea
+            focusCurrentTimeSlot();
         }
 
-        // Start new day with first entry
-        function startNewDay() {
+        // Focus on current time slot based on actual time
+        function focusCurrentTimeSlot() {
             const now = new Date();
-            const roundedTime = roundToNearest5Minutes(now);
-            const dateKey = formatDateKey(currentDate);
-            const timeKey = formatTimeKey(roundedTime);
+            const currentHour = now.getHours().toString().padStart(2, '0');
+            const currentMinute = Math.floor(now.getMinutes() / 5) * 5;
+            const currentMinuteStr = currentMinute.toString().padStart(2, '0');
+            const currentTimeSlot = `${currentHour}:${currentMinuteStr}`;
             
-            if (!activities[dateKey]) {
-                activities[dateKey] = {};
-            }
-            
-            activities[dateKey][timeKey] = "";
-            saveData();
-            renderActivities();
-            
-            // Focus on the new textarea
-            setTimeout(() => {
-                const textareas = document.querySelectorAll('.activity-input');
-                if (textareas.length > 0) {
-                    textareas[0].focus();
+            // Find and focus the textarea for current time
+            const textareas = document.querySelectorAll('.activity-input');
+            textareas.forEach(textarea => {
+                if (textarea.dataset.time === currentTimeSlot) {
+                    textarea.focus();
+                    return;
                 }
-            }, 100);
+            });
+            
+            // If not found, focus first textarea
+            if (textareas.length > 0 && document.activeElement.tagName !== 'TEXTAREA') {
+                textareas[0].focus();
+            }
+        }
+
+        // Jump to specific time in the table
+        function jumpToTime(time) {
+            const textareas = document.querySelectorAll('.activity-input');
+            textareas.forEach(textarea => {
+                if (textarea.dataset.time === time) {
+                    textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => textarea.focus(), 300);
+                    return;
+                }
+            });
         }
 
         // Save activity from textarea
@@ -575,51 +709,129 @@
             saveData();
         }
 
-        // Copy last entry
+        // Copy last entry to next time slot
         function copyLastEntry() {
             const dateKey = formatDateKey(currentDate);
             const dateActivities = activities[dateKey];
             
             if (!dateActivities) return;
             
-            const timestamps = Object.keys(dateActivities).sort();
-            if (timestamps.length === 0) return;
+            // Get all time slots
+            const timeSlots = generateAllTimeSlots();
             
-            const lastActivity = dateActivities[timestamps[timestamps.length - 1]];
-            const emptyTextareas = Array.from(document.querySelectorAll('.activity-input'))
-                .filter(ta => ta.value.trim() === '');
+            // Find the last non-empty entry
+            let lastNonEmptyTime = null;
+            let lastNonEmptyText = '';
             
-            if (emptyTextareas.length > 0) {
-                emptyTextareas[0].value = lastActivity;
-                emptyTextareas[0].focus();
-                saveActivity(emptyTextareas[0]);
+            for (let i = timeSlots.length - 1; i >= 0; i--) {
+                const time = timeSlots[i];
+                if (dateActivities[time] && dateActivities[time].trim() !== '') {
+                    lastNonEmptyTime = time;
+                    lastNonEmptyText = dateActivities[time];
+                    break;
+                }
             }
+            
+            if (!lastNonEmptyTime) {
+                showStatus('No previous entry found');
+                return;
+            }
+            
+            // Find next time slot
+            const nextIndex = timeSlots.indexOf(lastNonEmptyTime) + 1;
+            if (nextIndex >= timeSlots.length) {
+                showStatus('No next time slot available');
+                return;
+            }
+            
+            const nextTime = timeSlots[nextIndex];
+            
+            // Update the activity
+            dateActivities[nextTime] = lastNonEmptyText;
+            activities[dateKey] = dateActivities;
+            saveData();
+            
+            // Update the textarea
+            const textarea = document.querySelector(`textarea[data-time="${nextTime}"]`);
+            if (textarea) {
+                textarea.value = lastNonEmptyText;
+                textarea.focus();
+                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            showStatus(`Copied to ${nextTime}`);
         }
 
-        // Copy last 6 entries
+        // Copy last 6 entries to next 6 time slots
         function copyLast6Entries() {
             const dateKey = formatDateKey(currentDate);
             const dateActivities = activities[dateKey];
             
             if (!dateActivities) return;
             
-            const timestamps = Object.keys(dateActivities).sort();
-            if (timestamps.length === 0) return;
+            // Get all time slots
+            const timeSlots = generateAllTimeSlots();
             
-            const last6 = timestamps.slice(-6).map(ts => dateActivities[ts]);
-            const emptyTextareas = Array.from(document.querySelectorAll('.activity-input'))
-                .filter(ta => ta.value.trim() === '');
-            
-            const count = Math.min(last6.length, emptyTextareas.length);
-            
-            for (let i = 0; i < count; i++) {
-                emptyTextareas[i].value = last6[i];
-                saveActivity(emptyTextareas[i]);
+            // Find the last 6 non-empty entries
+            const lastEntries = [];
+            for (let i = timeSlots.length - 1; i >= 0; i--) {
+                const time = timeSlots[i];
+                if (dateActivities[time] && dateActivities[time].trim() !== '') {
+                    lastEntries.unshift({ time, text: dateActivities[time] });
+                    if (lastEntries.length >= 6) break;
+                }
             }
             
-            if (emptyTextareas[0]) {
-                emptyTextareas[0].focus();
+            if (lastEntries.length === 0) {
+                showStatus('No previous entries found');
+                return;
             }
+            
+            // Find starting point (after the last entry)
+            const lastEntryTime = lastEntries[lastEntries.length - 1].time;
+            const startIndex = timeSlots.indexOf(lastEntryTime) + 1;
+            
+            // Copy entries to next slots
+            let copiedCount = 0;
+            for (let i = 0; i < Math.min(lastEntries.length, 6); i++) {
+                const targetIndex = startIndex + i;
+                if (targetIndex >= timeSlots.length) break;
+                
+                const targetTime = timeSlots[targetIndex];
+                dateActivities[targetTime] = lastEntries[i].text;
+                
+                // Update the textarea
+                const textarea = document.querySelector(`textarea[data-time="${targetTime}"]`);
+                if (textarea) {
+                    textarea.value = lastEntries[i].text;
+                }
+                
+                copiedCount++;
+            }
+            
+            activities[dateKey] = dateActivities;
+            saveData();
+            
+            // Focus on first copied entry
+            const firstTargetTime = timeSlots[startIndex];
+            const firstTextarea = document.querySelector(`textarea[data-time="${firstTargetTime}"]`);
+            if (firstTextarea) {
+                firstTextarea.focus();
+                firstTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            showStatus(`Copied ${copiedCount} entries`);
+        }
+
+        // Show status message
+        function showStatus(message) {
+            const status = document.getElementById('copyStatus');
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 2000);
         }
 
         // Scroll position management
@@ -675,11 +887,11 @@
             // Calculate first day of month
             const firstDay = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), 1);
             
-            // Adjust for Tuesday start (if first day is Monday, show 1 day before)
+            // Adjust for Tuesday start
             let startOffset = firstDay.getDay();
-            if (startOffset === 1) startOffset = -6; // Monday
-            else if (startOffset === 0) startOffset = -5; // Sunday
-            else startOffset = startOffset - 1; // Adjust for Tuesday start
+            if (startOffset === 1) startOffset = -6;
+            else if (startOffset === 0) startOffset = -5;
+            else startOffset = startOffset - 1;
             
             const startDate = new Date(firstDay);
             startDate.setDate(startDate.getDate() + startOffset);
@@ -698,8 +910,9 @@
                     dayElement.classList.add('has-data');
                 }
                 
-                // Check if this is the selected date
-                if (currentDate.toDateString() === new Date().toDateString()) {
+                // Check if this is today
+                const today = new Date();
+                if (currentDate.toDateString() === today.toDateString()) {
                     dayElement.style.border = '2px solid #4fc3f7';
                 }
                 
@@ -725,26 +938,22 @@
             }
         }
 
-        // PDF Generation
+        // PDF Generation functions (same as before, but simplified)
         function generateDayPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const dateKey = formatDateKey(currentDate);
             const dateActivities = activities[dateKey] || {};
             
-            // Set title
             doc.setFontSize(16);
             doc.text(`Daily Activities - ${formatDateDisplay(currentDate)}`, 14, 20);
             
-            // Calculate statistics
             const stats = calculateDayStatistics(dateActivities);
             
-            // Add statistics
             doc.setFontSize(12);
             doc.text(`Total entries: ${stats.totalEntries}`, 14, 35);
             doc.text(`Most frequent activity: ${stats.mostFrequent || 'None'}`, 14, 45);
             
-            // Add top tasks section
             if (stats.topTasks.length > 0) {
                 doc.setFontSize(14);
                 doc.text('Top Tasks (Time Spent):', 14, 60);
@@ -756,36 +965,37 @@
                 });
             }
             
-            // Add activities table
-            const timestamps = Object.keys(dateActivities).sort();
-            if (timestamps.length > 0) {
-                let yPos = (stats.topTasks.length * 7) + 80;
-                
-                doc.setFontSize(14);
-                doc.text('Activities:', 14, yPos);
-                yPos += 10;
-                
-                doc.setFontSize(10);
-                timestamps.forEach((timestamp, index) => {
+            const timeSlots = generateAllTimeSlots();
+            let yPos = (stats.topTasks.length * 7) + 80;
+            let entriesAdded = 0;
+            
+            timeSlots.forEach(timeSlot => {
+                const activity = dateActivities[timeSlot];
+                if (activity && activity.trim() !== '') {
                     if (yPos > 280) {
                         doc.addPage();
                         yPos = 20;
                     }
                     
-                    doc.text(`${formatTimeDisplay(timestamp)}: ${dateActivities[timestamp]}`, 14, yPos);
+                    if (entriesAdded === 0) {
+                        doc.setFontSize(14);
+                        doc.text('Activities:', 14, yPos);
+                        yPos += 10;
+                        doc.setFontSize(10);
+                    }
+                    
+                    doc.text(`${timeSlot}: ${activity}`, 14, yPos);
                     yPos += 7;
-                });
-            }
+                    entriesAdded++;
+                }
+            });
             
-            // Save PDF
             doc.save(`Tracking_${dateKey}.pdf`);
         }
 
         function generateWeekPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
-            // Calculate week range (Tuesday to Monday)
             const weekDates = getWeekDates(currentDate);
             const weekData = {};
             let hasData = false;
@@ -803,11 +1013,9 @@
                 return;
             }
             
-            // Set title
             doc.setFontSize(16);
             doc.text(`Weekly Activities - ${formatDateDisplay(weekDates[0])} to ${formatDateDisplay(weekDates[6])}`, 14, 20);
             
-            // Add activities for each day
             let yPos = 35;
             
             weekDates.forEach(date => {
@@ -825,23 +1033,25 @@
                     yPos += 7;
                     
                     doc.setFontSize(10);
-                    const timestamps = Object.keys(dayActivities).sort();
+                    const timeSlots = generateAllTimeSlots();
                     
-                    timestamps.forEach(timestamp => {
-                        if (yPos > 280) {
-                            doc.addPage();
-                            yPos = 20;
+                    timeSlots.forEach(timeSlot => {
+                        const activity = dayActivities[timeSlot];
+                        if (activity && activity.trim() !== '') {
+                            if (yPos > 280) {
+                                doc.addPage();
+                                yPos = 20;
+                            }
+                            
+                            doc.text(`  ${timeSlot}: ${activity}`, 20, yPos);
+                            yPos += 7;
                         }
-                        
-                        doc.text(`  ${formatTimeDisplay(timestamp)}: ${dayActivities[timestamp]}`, 20, yPos);
-                        yPos += 7;
                     });
                     
                     yPos += 5;
                 }
             });
             
-            // Save PDF
             const startDate = formatDateKey(weekDates[0]);
             const endDate = formatDateKey(weekDates[6]);
             doc.save(`Tracking_Week_${startDate}_to_${endDate}.pdf`);
@@ -850,12 +1060,10 @@
         function generateMonthPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             const monthName = currentDate.toLocaleDateString('en-US', { month: 'long' });
             
-            // Get all days in month with data
             const monthData = {};
             let hasData = false;
             
@@ -875,11 +1083,9 @@
                 return;
             }
             
-            // Set title
             doc.setFontSize(16);
             doc.text(`Monthly Activities - ${monthName} ${year}`, 14, 20);
             
-            // Add activities for each day
             let yPos = 35;
             const dateKeys = Object.keys(monthData).sort();
             
@@ -897,22 +1103,24 @@
                 yPos += 7;
                 
                 doc.setFontSize(10);
-                const timestamps = Object.keys(dayActivities).sort();
+                const timeSlots = generateAllTimeSlots();
                 
-                timestamps.forEach(timestamp => {
-                    if (yPos > 280) {
-                        doc.addPage();
-                        yPos = 20;
+                timeSlots.forEach(timeSlot => {
+                    const activity = dayActivities[timeSlot];
+                    if (activity && activity.trim() !== '') {
+                        if (yPos > 280) {
+                            doc.addPage();
+                            yPos = 20;
+                        }
+                        
+                        doc.text(`  ${timeSlot}: ${activity}`, 20, yPos);
+                        yPos += 7;
                     }
-                    
-                    doc.text(`  ${formatTimeDisplay(timestamp)}: ${dayActivities[timestamp]}`, 20, yPos);
-                    yPos += 7;
                 });
                 
                 yPos += 5;
             });
             
-            // Save PDF
             doc.save(`Tracking_${monthName}_${year}.pdf`);
         }
 
@@ -925,14 +1133,6 @@
             return new Date(dateKey + 'T00:00:00');
         }
 
-        function formatTimeKey(date) {
-            return date.toTimeString().substring(0, 5);
-        }
-
-        function formatTimeDisplay(timeKey) {
-            return timeKey;
-        }
-
         function formatDateDisplay(date) {
             return date.toLocaleDateString('en-US', { 
                 weekday: 'short', 
@@ -942,23 +1142,7 @@
             });
         }
 
-        function roundToNearest5Minutes(date) {
-            const minutes = date.getMinutes();
-            const roundedMinutes = Math.ceil(minutes / 5) * 5;
-            const newDate = new Date(date);
-            
-            if (roundedMinutes === 60) {
-                newDate.setHours(newDate.getHours() + 1);
-                newDate.setMinutes(0);
-            } else {
-                newDate.setMinutes(roundedMinutes);
-            }
-            
-            return newDate;
-        }
-
         function getWeekDates(date) {
-            // Get Tuesday to Monday week
             const day = date.getDay();
             const diff = day >= 2 ? date.getDate() - day + 2 : date.getDate() - day - 5;
             
@@ -977,33 +1161,27 @@
 
         function calculateDayStatistics(dayActivities) {
             const stats = {
-                totalEntries: Object.keys(dayActivities).length,
+                totalEntries: 0,
                 mostFrequent: null,
                 topTasks: []
             };
             
-            // Count occurrences of each activity
             const activityCounts = {};
             Object.values(dayActivities).forEach(activity => {
-                if (activity.trim()) {
+                if (activity && activity.trim() !== '') {
+                    stats.totalEntries++;
                     activityCounts[activity] = (activityCounts[activity] || 0) + 1;
                 }
             });
             
-            // Find most frequent
             let maxCount = 0;
-            let mostFrequent = null;
-            
             Object.entries(activityCounts).forEach(([activity, count]) => {
                 if (count > maxCount) {
                     maxCount = count;
-                    mostFrequent = activity;
+                    stats.mostFrequent = activity;
                 }
             });
             
-            stats.mostFrequent = mostFrequent;
-            
-            // Calculate top 6 tasks by time spent (5 min per entry)
             const taskTimes = Object.entries(activityCounts)
                 .map(([activity, count]) => ({
                     activity,

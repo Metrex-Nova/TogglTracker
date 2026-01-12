@@ -75,29 +75,6 @@
             text-align: center;
         }
 
-        .main-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-
-        .control-btn {
-            background: #222;
-            color: white;
-            border: 1px solid #444;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-
-        .control-btn:hover {
-            background: #333;
-        }
-
         .pdf-buttons {
             display: flex;
             gap: 10px;
@@ -164,6 +141,7 @@
 
         .activity-cell {
             width: calc(100% - 100px);
+            position: relative;
         }
 
         textarea {
@@ -173,7 +151,7 @@
             color: white;
             border: 1px solid #444;
             border-radius: 4px;
-            padding: 8px;
+            padding: 8px 40px 8px 8px;
             font-family: inherit;
             font-size: 14px;
             resize: vertical;
@@ -212,6 +190,34 @@
 
         .start-day-btn:hover {
             background: #00b248;
+        }
+
+        /* Plus button styles */
+        .plus-btn {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            z-index: 2;
+        }
+
+        .plus-btn:hover {
+            background: #444;
+            transform: scale(1.1);
+        }
+
+        .plus-btn.hidden {
+            display: none;
         }
 
         /* Calendar modal */
@@ -302,6 +308,25 @@
             background: #444;
         }
 
+        /* Status message */
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            display: none;
+            z-index: 1000;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            10%, 90% { opacity: 1; }
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             .date-controls {
@@ -314,11 +339,7 @@
                 margin-bottom: 10px;
             }
             
-            .main-controls {
-                flex-direction: column;
-            }
-            
-            .control-btn, .pdf-btn {
+            .pdf-btn {
                 width: 100%;
             }
             
@@ -329,6 +350,7 @@
             textarea {
                 min-height: 80px;
                 font-size: 16px;
+                padding-right: 35px;
             }
             
             .time-cell {
@@ -338,6 +360,14 @@
             
             .activity-cell {
                 width: calc(100% - 70px);
+            }
+            
+            .plus-btn {
+                width: 25px;
+                height: 25px;
+                font-size: 16px;
+                right: 5px;
+                top: 5px;
             }
         }
 
@@ -360,18 +390,6 @@
         .tracking-area {
             scroll-behavior: smooth;
         }
-
-        .copy-status {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #333;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 4px;
-            display: none;
-            z-index: 1000;
-        }
     </style>
 </head>
 <body>
@@ -387,11 +405,6 @@
                     <button class="nav-btn" id="todayBtn">Today</button>
                 </div>
                 <button class="nav-btn" id="calendarBtn">📅 Calendar</button>
-            </div>
-            
-            <div class="main-controls">
-                <button class="control-btn" id="copyLastBtn">Copy Last Entry</button>
-                <button class="control-btn" id="copyLast6Btn">Copy Last 6 Entries</button>
             </div>
             
             <div class="pdf-buttons">
@@ -434,7 +447,7 @@
     </div>
 
     <!-- Status message -->
-    <div class="copy-status" id="copyStatus"></div>
+    <div class="status-message" id="statusMessage"></div>
 
     <!-- Include jsPDF library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -445,8 +458,7 @@
         let activities = {};
         let scrollPosition = 0;
         let currentCalendarMonth = new Date();
-        let lastCopiedText = '';
-        let currentFocusIndex = 0;
+        let lastNonEmptyIndex = -1;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -476,10 +488,6 @@
             document.getElementById('todayBtn').addEventListener('click', goToToday);
             document.getElementById('calendarBtn').addEventListener('click', openCalendar);
             
-            // Copy buttons
-            document.getElementById('copyLastBtn').addEventListener('click', copyLastEntry);
-            document.getElementById('copyLast6Btn').addEventListener('click', copyLast6Entries);
-            
             // PDF buttons
             document.getElementById('dayPdfBtn').addEventListener('click', generateDayPDF);
             document.getElementById('weekPdfBtn').addEventListener('click', generateWeekPDF);
@@ -498,23 +506,6 @@
             
             // Load scroll position after load
             window.addEventListener('load', restoreScrollPosition);
-            
-            // Auto-save when typing
-            document.addEventListener('input', function(e) {
-                if (e.target.classList.contains('activity-input')) {
-                    saveActivity(e.target);
-                }
-            });
-            
-            // Track focus for copy operations
-            document.addEventListener('focusin', function(e) {
-                if (e.target.classList.contains('activity-input')) {
-                    const index = parseInt(e.target.dataset.index);
-                    if (!isNaN(index)) {
-                        currentFocusIndex = index;
-                    }
-                }
-            });
         }
 
         // Change date by offset days
@@ -602,6 +593,15 @@
             // Get all time slots in order
             const timeSlots = generateAllTimeSlots();
             
+            // Find last non-empty index for plus button placement
+            lastNonEmptyIndex = -1;
+            for (let i = timeSlots.length - 1; i >= 0; i--) {
+                if (dateActivities[timeSlots[i]] && dateActivities[timeSlots[i]].trim() !== '') {
+                    lastNonEmptyIndex = i;
+                    break;
+                }
+            }
+            
             let html = '<div class="table-container">';
             html += '<div class="time-navigation">';
             html += '<span>Jump to:</span>';
@@ -618,6 +618,8 @@
             
             timeSlots.forEach((timeSlot, index) => {
                 const activity = dateActivities[timeSlot] || "";
+                const showPlusButton = index === lastNonEmptyIndex;
+                
                 html += `
                     <tr>
                         <td class="time-cell">${timeSlot}</td>
@@ -629,6 +631,7 @@
                                 data-index="${index}"
                                 placeholder="What did you do at ${timeSlot}?"
                             >${activity}</textarea>
+                            ${showPlusButton ? '<button class="plus-btn" data-index="' + index + '">+</button>' : ''}
                         </td>
                     </tr>
                 `;
@@ -641,10 +644,23 @@
             document.querySelectorAll('.activity-input').forEach((textarea, index) => {
                 textarea.addEventListener('input', function() {
                     saveActivity(this);
+                    updatePlusButtonPosition();
                 });
                 
                 textarea.addEventListener('focus', function() {
-                    currentFocusIndex = index;
+                    // Scroll textarea into view on mobile
+                    if (window.innerWidth <= 768) {
+                        setTimeout(() => {
+                            this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    }
+                });
+            });
+            
+            // Add event listeners to plus buttons
+            document.querySelectorAll('.plus-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    copyToNextSlot(this.dataset.index);
                 });
             });
             
@@ -660,6 +676,33 @@
             focusCurrentTimeSlot();
         }
 
+        // Update plus button position based on last non-empty entry
+        function updatePlusButtonPosition() {
+            const dateKey = formatDateKey(currentDate);
+            const dateActivities = activities[dateKey] || {};
+            const timeSlots = generateAllTimeSlots();
+            
+            // Find new last non-empty index
+            let newLastNonEmptyIndex = -1;
+            for (let i = timeSlots.length - 1; i >= 0; i--) {
+                if (dateActivities[timeSlots[i]] && dateActivities[timeSlots[i]].trim() !== '') {
+                    newLastNonEmptyIndex = i;
+                    break;
+                }
+            }
+            
+            // If position changed, re-render the table
+            if (newLastNonEmptyIndex !== lastNonEmptyIndex) {
+                lastNonEmptyIndex = newLastNonEmptyIndex;
+                renderActivities();
+                
+                // Show status message
+                if (newLastNonEmptyIndex >= 0) {
+                    showStatus(`Plus button moved to ${timeSlots[newLastNonEmptyIndex]}`);
+                }
+            }
+        }
+
         // Focus on current time slot based on actual time
         function focusCurrentTimeSlot() {
             const now = new Date();
@@ -672,14 +715,21 @@
             const textareas = document.querySelectorAll('.activity-input');
             textareas.forEach(textarea => {
                 if (textarea.dataset.time === currentTimeSlot) {
-                    textarea.focus();
+                    setTimeout(() => {
+                        textarea.focus();
+                        if (window.innerWidth <= 768) {
+                            textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
                     return;
                 }
             });
             
             // If not found, focus first textarea
             if (textareas.length > 0 && document.activeElement.tagName !== 'TEXTAREA') {
-                textareas[0].focus();
+                setTimeout(() => {
+                    textareas[0].focus();
+                }, 100);
             }
         }
 
@@ -709,123 +759,63 @@
             saveData();
         }
 
-        // Copy last entry to next time slot
-        function copyLastEntry() {
+        // Copy activity to next time slot when plus button is clicked
+        function copyToNextSlot(index) {
             const dateKey = formatDateKey(currentDate);
             const dateActivities = activities[dateKey];
             
             if (!dateActivities) return;
             
-            // Get all time slots
             const timeSlots = generateAllTimeSlots();
+            const currentIndex = parseInt(index);
             
-            // Find the last non-empty entry
-            let lastNonEmptyTime = null;
-            let lastNonEmptyText = '';
+            // Check if current slot has content
+            const currentTime = timeSlots[currentIndex];
+            const currentText = dateActivities[currentTime] || "";
             
-            for (let i = timeSlots.length - 1; i >= 0; i--) {
-                const time = timeSlots[i];
-                if (dateActivities[time] && dateActivities[time].trim() !== '') {
-                    lastNonEmptyTime = time;
-                    lastNonEmptyText = dateActivities[time];
-                    break;
-                }
-            }
-            
-            if (!lastNonEmptyTime) {
-                showStatus('No previous entry found');
+            if (!currentText.trim()) {
+                showStatus('Current slot is empty');
                 return;
             }
             
-            // Find next time slot
-            const nextIndex = timeSlots.indexOf(lastNonEmptyTime) + 1;
+            // Check if next slot exists
+            const nextIndex = currentIndex + 1;
             if (nextIndex >= timeSlots.length) {
-                showStatus('No next time slot available');
+                showStatus('No more time slots available');
                 return;
             }
             
             const nextTime = timeSlots[nextIndex];
             
-            // Update the activity
-            dateActivities[nextTime] = lastNonEmptyText;
+            // Copy text to next slot
+            dateActivities[nextTime] = currentText;
             activities[dateKey] = dateActivities;
             saveData();
             
-            // Update the textarea
-            const textarea = document.querySelector(`textarea[data-time="${nextTime}"]`);
-            if (textarea) {
-                textarea.value = lastNonEmptyText;
-                textarea.focus();
-                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Update the UI
+            const nextTextarea = document.querySelector(`textarea[data-time="${nextTime}"]`);
+            if (nextTextarea) {
+                nextTextarea.value = currentText;
+                nextTextarea.focus();
+                
+                // Scroll to next textarea on mobile
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        nextTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                }
+                
+                // Trigger input event to update plus button position
+                const event = new Event('input', { bubbles: true });
+                nextTextarea.dispatchEvent(event);
             }
             
             showStatus(`Copied to ${nextTime}`);
         }
 
-        // Copy last 6 entries to next 6 time slots
-        function copyLast6Entries() {
-            const dateKey = formatDateKey(currentDate);
-            const dateActivities = activities[dateKey];
-            
-            if (!dateActivities) return;
-            
-            // Get all time slots
-            const timeSlots = generateAllTimeSlots();
-            
-            // Find the last 6 non-empty entries
-            const lastEntries = [];
-            for (let i = timeSlots.length - 1; i >= 0; i--) {
-                const time = timeSlots[i];
-                if (dateActivities[time] && dateActivities[time].trim() !== '') {
-                    lastEntries.unshift({ time, text: dateActivities[time] });
-                    if (lastEntries.length >= 6) break;
-                }
-            }
-            
-            if (lastEntries.length === 0) {
-                showStatus('No previous entries found');
-                return;
-            }
-            
-            // Find starting point (after the last entry)
-            const lastEntryTime = lastEntries[lastEntries.length - 1].time;
-            const startIndex = timeSlots.indexOf(lastEntryTime) + 1;
-            
-            // Copy entries to next slots
-            let copiedCount = 0;
-            for (let i = 0; i < Math.min(lastEntries.length, 6); i++) {
-                const targetIndex = startIndex + i;
-                if (targetIndex >= timeSlots.length) break;
-                
-                const targetTime = timeSlots[targetIndex];
-                dateActivities[targetTime] = lastEntries[i].text;
-                
-                // Update the textarea
-                const textarea = document.querySelector(`textarea[data-time="${targetTime}"]`);
-                if (textarea) {
-                    textarea.value = lastEntries[i].text;
-                }
-                
-                copiedCount++;
-            }
-            
-            activities[dateKey] = dateActivities;
-            saveData();
-            
-            // Focus on first copied entry
-            const firstTargetTime = timeSlots[startIndex];
-            const firstTextarea = document.querySelector(`textarea[data-time="${firstTargetTime}"]`);
-            if (firstTextarea) {
-                firstTextarea.focus();
-                firstTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            
-            showStatus(`Copied ${copiedCount} entries`);
-        }
-
         // Show status message
         function showStatus(message) {
-            const status = document.getElementById('copyStatus');
+            const status = document.getElementById('statusMessage');
             status.textContent = message;
             status.style.display = 'block';
             
@@ -898,39 +888,39 @@
             
             // Generate 42 days (6 weeks)
             for (let i = 0; i < 42; i++) {
-                const currentDate = new Date(startDate);
-                currentDate.setDate(startDate.getDate() + i);
+                const date = new Date(startDate);
+                date.setDate(startDate.getDate() + i);
                 
                 const dayElement = document.createElement('div');
                 dayElement.className = 'calendar-day';
                 
                 // Check if this date has data
-                const dateKey = formatDateKey(currentDate);
+                const dateKey = formatDateKey(date);
                 if (activities[dateKey] && Object.keys(activities[dateKey]).length > 0) {
                     dayElement.classList.add('has-data');
                 }
                 
                 // Check if this is today
                 const today = new Date();
-                if (currentDate.toDateString() === today.toDateString()) {
+                if (date.toDateString() === today.toDateString()) {
                     dayElement.style.border = '2px solid #4fc3f7';
                 }
                 
                 // Check if this is the currently viewed date
-                if (currentDate.toDateString() === currentDate.toDateString()) {
+                if (date.toDateString() === currentDate.toDateString()) {
                     dayElement.classList.add('selected');
                 }
                 
-                dayElement.textContent = currentDate.getDate();
+                dayElement.textContent = date.getDate();
                 dayElement.dataset.date = dateKey;
                 
                 // Highlight different month
-                if (currentDate.getMonth() !== currentCalendarMonth.getMonth()) {
+                if (date.getMonth() !== currentCalendarMonth.getMonth()) {
                     dayElement.style.opacity = '0.5';
                 }
                 
                 dayElement.addEventListener('click', () => {
-                    loadDate(currentDate);
+                    loadDate(date);
                     closeCalendar();
                 });
                 
@@ -938,7 +928,7 @@
             }
         }
 
-        // PDF Generation functions (same as before, but simplified)
+        // PDF Generation functions
         function generateDayPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();

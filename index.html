@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Activity Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #111;
+            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            padding: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+
+        .date-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-btn:hover {
+            background: #444;
+        }
+
+        #currentDate {
+            font-size: 18px;
+            font-weight: bold;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .main-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .control-btn {
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .control-btn:hover {
+            background: #333;
+        }
+
+        .pdf-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .pdf-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .pdf-btn:hover {
+            background: #0052a3;
+        }
+
+        .tracking-area {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background-color: #222;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 2px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .time-cell {
+            width: 100px;
+            font-weight: bold;
+            color: #4fc3f7;
+            vertical-align: top;
+            padding-top: 12px;
+        }
+
+        .activity-cell {
+            width: calc(100% - 100px);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 60px;
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.2);
+        }
+
+        footer {
+            text-align: center;
+            padding: 15px;
+            border-top: 1px solid #333;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .empty-day {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .start-day-btn {
+            background: #00c853;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .start-day-btn:hover {
+            background: #00b248;
+        }
+
+        /* Calendar modal */
+        .calendar-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .calendar-content {
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .calendar-day {
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .calendar-day:hover {
+            background: #333;
+        }
+
+        .calendar-day.selected {
+            background: #0066cc;
+            color: white;
+        }
+
+        .calendar-day.has-data {
+            border: 1px solid #00c853;
+        }
+
+        .weekday-header {
+            text-align: center;
+            padding: 5px;
+            color: #888;
+            font-size: 12px;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .date-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .date-nav {
+                justify-content: center;
+                margin-bottom: 10px;
+            }
+            
+            .main-controls {
+                flex-direction: column;
+            }
+            
+            .control-btn, .pdf-btn {
+                width: 100%;
+            }
+            
+            th, td {
+                padding: 6px 4px;
+            }
+            
+            textarea {
+                min-height: 80px;
+                font-size: 16px; /* Better for mobile typing */
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+            
+            .time-cell {
+                width: 80px;
+                font-size: 14px;
+            }
+            
+            .activity-cell {
+                width: calc(100% - 80px);
+            }
+        }
+
+        /* Scroll position preservation */
+        .tracking-area {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Daily Activity Tracker</h1>
+            
+            <div class="date-controls">
+                <div class="date-nav">
+                    <button class="nav-btn" id="prevDay">←</button>
+                    <div id="currentDate">Loading...</div>
+                    <button class="nav-btn" id="nextDay">→</button>
+                    <button class="nav-btn" id="todayBtn">Today</button>
+                </div>
+                <button class="nav-btn" id="calendarBtn">📅 Calendar</button>
+            </div>
+            
+            <div class="main-controls">
+                <button class="control-btn" id="copyLastBtn">Copy Last Entry</button>
+                <button class="control-btn" id="copyLast6Btn">Copy Last 6 Entries</button>
+            </div>
+            
+            <div class="pdf-buttons">
+                <button class="pdf-btn" id="dayPdfBtn">Day PDF</button>
+                <button class="pdf-btn" id="weekPdfBtn">Week PDF</button>
+                <button class="pdf-btn" id="monthPdfBtn">Month PDF</button>
+            </div>
+        </header>
+
+        <main class="tracking-area" id="trackingArea">
+            <div id="trackingContent">
+                <!-- Content will be loaded here -->
+                <div class="empty-day" id="emptyDayMessage">
+                    <p>No entries for this day yet.</p>
+                    <button class="start-day-btn" id="startDayBtn">Start Tracking Day</button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            Data is stored in your browser. Clear browser data will delete all records.
+        </footer>
+    </div>
+
+    <!-- Calendar Modal -->
+    <div class="calendar-modal" id="calendarModal">
+        <div class="calendar-content">
+            <div class="calendar-header">
+                <button class="nav-btn" id="prevMonthBtn">←</button>
+                <h3 id="currentMonth">January 2024</h3>
+                <button class="nav-btn" id="nextMonthBtn">→</button>
+            </div>
+            <div class="calendar-grid" id="calendarDays">
+                <!-- Calendar days will be generated here -->
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="control-btn" id="closeCalendarBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include jsPDF library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <script>
+        // Global variables
+        let currentDate = new Date();
+        let activities = {};
+        let scrollPosition = 0;
+        let currentCalendarMonth = new Date();
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            setupEventListeners();
+            loadDate(currentDate);
+        });
+
+        // Load data from localStorage
+        function loadData() {
+            const saved = localStorage.getItem('activityTrackerData');
+            if (saved) {
+                activities = JSON.parse(saved);
+            }
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('activityTrackerData', JSON.stringify(activities));
+        }
+
+        // Setup all event listeners
+        function setupEventListeners() {
+            // Date navigation
+            document.getElementById('prevDay').addEventListener('click', () => changeDate(-1));
+            document.getElementById('nextDay').addEventListener('click', () => changeDate(1));
+            document.getElementById('todayBtn').addEventListener('click', goToToday);
+            document.getElementById('calendarBtn').addEventListener('click', openCalendar);
+            
+            // Copy buttons
+            document.getElementById('copyLastBtn').addEventListener('click', copyLastEntry);
+            document.getElementById('copyLast6Btn').addEventListener('click', copyLast6Entries);
+            
+            // PDF buttons
+            document.getElementById('dayPdfBtn').addEventListener('click', generateDayPDF);
+            document.getElementById('weekPdfBtn').addEventListener('click', generateWeekPDF);
+            document.getElementById('monthPdfBtn').addEventListener('click', generateMonthPDF);
+            
+            // Start day button
+            document.getElementById('startDayBtn').addEventListener('click', startNewDay);
+            
+            // Calendar controls
+            document.getElementById('closeCalendarBtn').addEventListener('click', closeCalendar);
+            document.getElementById('prevMonthBtn').addEventListener('click', () => changeCalendarMonth(-1));
+            document.getElementById('nextMonthBtn').addEventListener('click', () => changeCalendarMonth(1));
+            
+            // Save scroll position before unload
+            window.addEventListener('beforeunload', saveScrollPosition);
+            
+            // Load scroll position after load
+            window.addEventListener('load', restoreScrollPosition);
+            
+            // Auto-save when typing
+            document.addEventListener('input', function(e) {
+                if (e.target.classList.contains('activity-input')) {
+                    saveActivity(e.target);
+                }
+            });
+        }
+
+        // Change date by offset days
+        function changeDate(offset) {
+            const newDate = new Date(currentDate);
+            newDate.setDate(newDate.getDate() + offset);
+            loadDate(newDate);
+        }
+
+        // Go to today
+        function goToToday() {
+            loadDate(new Date());
+        }
+
+        // Load a specific date
+        function loadDate(date) {
+            currentDate = date;
+            updateDateDisplay();
+            renderActivities();
+            restoreScrollPosition();
+        }
+
+        // Update date display
+        function updateDateDisplay() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('en-US', options);
+        }
+
+        // Render activities for current date
+        function renderActivities() {
+            const dateKey = formatDateKey(currentDate);
+            const dateActivities = activities[dateKey] || {};
+            const container = document.getElementById('trackingContent');
+            
+            if (Object.keys(dateActivities).length === 0) {
+                container.innerHTML = `
+                    <div class="empty-day" id="emptyDayMessage">
+                        <p>No entries for this day yet.</p>
+                        <button class="start-day-btn" id="startDayBtn">Start Tracking Day</button>
+                    </div>
+                `;
+                document.getElementById('startDayBtn').addEventListener('click', startNewDay);
+                return;
+            }
+            
+            // Get sorted timestamps
+            const timestamps = Object.keys(dateActivities).sort();
+            
+            let html = '<div class="table-container"><table>';
+            html += '<thead><tr><th>Time</th><th>Activity</th></tr></thead><tbody>';
+            
+            timestamps.forEach((timestamp, index) => {
+                const activity = dateActivities[timestamp];
+                html += `
+                    <tr>
+                        <td class="time-cell">${formatTimeDisplay(timestamp)}</td>
+                        <td class="activity-cell">
+                            <textarea 
+                                class="activity-input" 
+                                data-date="${dateKey}" 
+                                data-time="${timestamp}"
+                                placeholder="What did you do?"
+                            >${activity}</textarea>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            
+            // Focus on first textarea
+            const firstTextarea = container.querySelector('textarea');
+            if (firstTextarea) {
+                firstTextarea.focus();
+            }
+            
+            // Add event listeners to new textareas
+            document.querySelectorAll('.activity-input').forEach(textarea => {
+                textarea.addEventListener('input', function() {
+                    saveActivity(this);
+                });
+            });
+        }
+
+        // Start new day with first entry
+        function startNewDay() {
+            const now = new Date();
+            const roundedTime = roundToNearest5Minutes(now);
+            const dateKey = formatDateKey(currentDate);
+            const timeKey = formatTimeKey(roundedTime);
+            
+            if (!activities[dateKey]) {
+                activities[dateKey] = {};
+            }
+            
+            activities[dateKey][timeKey] = "";
+            saveData();
+            renderActivities();
+            
+            // Focus on the new textarea
+            setTimeout(() => {
+                const textareas = document.querySelectorAll('.activity-input');
+                if (textareas.length > 0) {
+                    textareas[0].focus();
+                }
+            }, 100);
+        }
+
+        // Save activity from textarea
+        function saveActivity(textarea) {
+            const dateKey = textarea.dataset.date;
+            const timeKey = textarea.dataset.time;
+            const activity = textarea.value;
+            
+            if (!activities[dateKey]) {
+                activities[dateKey] = {};
+            }
+            
+            activities[dateKey][timeKey] = activity;
+            saveData();
+        }
+
+        // Copy last entry
+        function copyLastEntry() {
+            const dateKey = formatDateKey(currentDate);
+            const dateActivities = activities[dateKey];
+            
+            if (!dateActivities) return;
+            
+            const timestamps = Object.keys(dateActivities).sort();
+            if (timestamps.length === 0) return;
+            
+            const lastActivity = dateActivities[timestamps[timestamps.length - 1]];
+            const emptyTextareas = Array.from(document.querySelectorAll('.activity-input'))
+                .filter(ta => ta.value.trim() === '');
+            
+            if (emptyTextareas.length > 0) {
+                emptyTextareas[0].value = lastActivity;
+                emptyTextareas[0].focus();
+                saveActivity(emptyTextareas[0]);
+            }
+        }
+
+        // Copy last 6 entries
+        function copyLast6Entries() {
+            const dateKey = formatDateKey(currentDate);
+            const dateActivities = activities[dateKey];
+            
+            if (!dateActivities) return;
+            
+            const timestamps = Object.keys(dateActivities).sort();
+            if (timestamps.length === 0) return;
+            
+            const last6 = timestamps.slice(-6).map(ts => dateActivities[ts]);
+            const emptyTextareas = Array.from(document.querySelectorAll('.activity-input'))
+                .filter(ta => ta.value.trim() === '');
+            
+            const count = Math.min(last6.length, emptyTextareas.length);
+            
+            for (let i = 0; i < count; i++) {
+                emptyTextareas[i].value = last6[i];
+                saveActivity(emptyTextareas[i]);
+            }
+            
+            if (emptyTextareas[0]) {
+                emptyTextareas[0].focus();
+            }
+        }
+
+        // Scroll position management
+        function saveScrollPosition() {
+            scrollPosition = document.getElementById('trackingArea').scrollTop;
+            localStorage.setItem('activityTrackerScroll', scrollPosition.toString());
+        }
+
+        function restoreScrollPosition() {
+            const savedPosition = localStorage.getItem('activityTrackerScroll');
+            if (savedPosition) {
+                setTimeout(() => {
+                    document.getElementById('trackingArea').scrollTop = parseInt(savedPosition);
+                }, 100);
+            }
+        }
+
+        // Calendar functions
+        function openCalendar() {
+            currentCalendarMonth = new Date(currentDate);
+            updateCalendar();
+            document.getElementById('calendarModal').style.display = 'flex';
+        }
+
+        function closeCalendar() {
+            document.getElementById('calendarModal').style.display = 'none';
+        }
+
+        function changeCalendarMonth(offset) {
+            currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() + offset);
+            updateCalendar();
+        }
+
+        function updateCalendar() {
+            const monthYear = currentCalendarMonth.toLocaleDateString('en-US', { 
+                month: 'long', 
+                year: 'numeric' 
+            });
+            document.getElementById('currentMonth').textContent = monthYear;
+            
+            const calendarDays = document.getElementById('calendarDays');
+            calendarDays.innerHTML = '';
+            
+            // Add weekday headers (Tuesday to Monday)
+            const weekdays = ['Tu', 'We', 'Th', 'Fr', 'Sa', 'Su', 'Mo'];
+            weekdays.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'weekday-header';
+                header.textContent = day;
+                calendarDays.appendChild(header);
+            });
+            
+            // Calculate first day of month
+            const firstDay = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth(), 1);
+            
+            // Adjust for Tuesday start (if first day is Monday, show 1 day before)
+            let startOffset = firstDay.getDay();
+            if (startOffset === 1) startOffset = -6; // Monday
+            else if (startOffset === 0) startOffset = -5; // Sunday
+            else startOffset = startOffset - 1; // Adjust for Tuesday start
+            
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() + startOffset);
+            
+            // Generate 42 days (6 weeks)
+            for (let i = 0; i < 42; i++) {
+                const currentDate = new Date(startDate);
+                currentDate.setDate(startDate.getDate() + i);
+                
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                // Check if this date has data
+                const dateKey = formatDateKey(currentDate);
+                if (activities[dateKey] && Object.keys(activities[dateKey]).length > 0) {
+                    dayElement.classList.add('has-data');
+                }
+                
+                // Check if this is the selected date
+                if (currentDate.toDateString() === new Date().toDateString()) {
+                    dayElement.style.border = '2px solid #4fc3f7';
+                }
+                
+                // Check if this is the currently viewed date
+                if (currentDate.toDateString() === currentDate.toDateString()) {
+                    dayElement.classList.add('selected');
+                }
+                
+                dayElement.textContent = currentDate.getDate();
+                dayElement.dataset.date = dateKey;
+                
+                // Highlight different month
+                if (currentDate.getMonth() !== currentCalendarMonth.getMonth()) {
+                    dayElement.style.opacity = '0.5';
+                }
+                
+                dayElement.addEventListener('click', () => {
+                    loadDate(currentDate);
+                    closeCalendar();
+                });
+                
+                calendarDays.appendChild(dayElement);
+            }
+        }
+
+        // PDF Generation
+        function generateDayPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const dateKey = formatDateKey(currentDate);
+            const dateActivities = activities[dateKey] || {};
+            
+            // Set title
+            doc.setFontSize(16);
+            doc.text(`Daily Activities - ${formatDateDisplay(currentDate)}`, 14, 20);
+            
+            // Calculate statistics
+            const stats = calculateDayStatistics(dateActivities);
+            
+            // Add statistics
+            doc.setFontSize(12);
+            doc.text(`Total entries: ${stats.totalEntries}`, 14, 35);
+            doc.text(`Most frequent activity: ${stats.mostFrequent || 'None'}`, 14, 45);
+            
+            // Add top tasks section
+            if (stats.topTasks.length > 0) {
+                doc.setFontSize(14);
+                doc.text('Top Tasks (Time Spent):', 14, 60);
+                doc.setFontSize(11);
+                
+                stats.topTasks.forEach((task, index) => {
+                    const yPos = 70 + (index * 7);
+                    doc.text(`${index + 1}. ${task.activity}: ${task.time} minutes`, 20, yPos);
+                });
+            }
+            
+            // Add activities table
+            const timestamps = Object.keys(dateActivities).sort();
+            if (timestamps.length > 0) {
+                let yPos = (stats.topTasks.length * 7) + 80;
+                
+                doc.setFontSize(14);
+                doc.text('Activities:', 14, yPos);
+                yPos += 10;
+                
+                doc.setFontSize(10);
+                timestamps.forEach((timestamp, index) => {
+                    if (yPos > 280) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    
+                    doc.text(`${formatTimeDisplay(timestamp)}: ${dateActivities[timestamp]}`, 14, yPos);
+                    yPos += 7;
+                });
+            }
+            
+            // Save PDF
+            doc.save(`Tracking_${dateKey}.pdf`);
+        }
+
+        function generateWeekPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Calculate week range (Tuesday to Monday)
+            const weekDates = getWeekDates(currentDate);
+            const weekData = {};
+            let hasData = false;
+            
+            weekDates.forEach(date => {
+                const dateKey = formatDateKey(date);
+                weekData[dateKey] = activities[dateKey] || {};
+                if (Object.keys(weekData[dateKey]).length > 0) {
+                    hasData = true;
+                }
+            });
+            
+            if (!hasData) {
+                alert('No data for this week');
+                return;
+            }
+            
+            // Set title
+            doc.setFontSize(16);
+            doc.text(`Weekly Activities - ${formatDateDisplay(weekDates[0])} to ${formatDateDisplay(weekDates[6])}`, 14, 20);
+            
+            // Add activities for each day
+            let yPos = 35;
+            
+            weekDates.forEach(date => {
+                const dateKey = formatDateKey(date);
+                const dayActivities = weekData[dateKey];
+                
+                if (Object.keys(dayActivities).length > 0) {
+                    if (yPos > 250) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    
+                    doc.setFontSize(12);
+                    doc.text(formatDateDisplay(date), 14, yPos);
+                    yPos += 7;
+                    
+                    doc.setFontSize(10);
+                    const timestamps = Object.keys(dayActivities).sort();
+                    
+                    timestamps.forEach(timestamp => {
+                        if (yPos > 280) {
+                            doc.addPage();
+                            yPos = 20;
+                        }
+                        
+                        doc.text(`  ${formatTimeDisplay(timestamp)}: ${dayActivities[timestamp]}`, 20, yPos);
+                        yPos += 7;
+                    });
+                    
+                    yPos += 5;
+                }
+            });
+            
+            // Save PDF
+            const startDate = formatDateKey(weekDates[0]);
+            const endDate = formatDateKey(weekDates[6]);
+            doc.save(`Tracking_Week_${startDate}_to_${endDate}.pdf`);
+        }
+
+        function generateMonthPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const monthName = currentDate.toLocaleDateString('en-US', { month: 'long' });
+            
+            // Get all days in month with data
+            const monthData = {};
+            let hasData = false;
+            
+            for (let day = 1; day <= 31; day++) {
+                const date = new Date(year, month, day);
+                if (date.getMonth() !== month) break;
+                
+                const dateKey = formatDateKey(date);
+                if (activities[dateKey] && Object.keys(activities[dateKey]).length > 0) {
+                    monthData[dateKey] = activities[dateKey];
+                    hasData = true;
+                }
+            }
+            
+            if (!hasData) {
+                alert('No data for this month');
+                return;
+            }
+            
+            // Set title
+            doc.setFontSize(16);
+            doc.text(`Monthly Activities - ${monthName} ${year}`, 14, 20);
+            
+            // Add activities for each day
+            let yPos = 35;
+            const dateKeys = Object.keys(monthData).sort();
+            
+            dateKeys.forEach(dateKey => {
+                const date = parseDateKey(dateKey);
+                const dayActivities = monthData[dateKey];
+                
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                
+                doc.setFontSize(12);
+                doc.text(formatDateDisplay(date), 14, yPos);
+                yPos += 7;
+                
+                doc.setFontSize(10);
+                const timestamps = Object.keys(dayActivities).sort();
+                
+                timestamps.forEach(timestamp => {
+                    if (yPos > 280) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    
+                    doc.text(`  ${formatTimeDisplay(timestamp)}: ${dayActivities[timestamp]}`, 20, yPos);
+                    yPos += 7;
+                });
+                
+                yPos += 5;
+            });
+            
+            // Save PDF
+            doc.save(`Tracking_${monthName}_${year}.pdf`);
+        }
+
+        // Utility functions
+        function formatDateKey(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function parseDateKey(dateKey) {
+            return new Date(dateKey + 'T00:00:00');
+        }
+
+        function formatTimeKey(date) {
+            return date.toTimeString().substring(0, 5);
+        }
+
+        function formatTimeDisplay(timeKey) {
+            return timeKey;
+        }
+
+        function formatDateDisplay(date) {
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function roundToNearest5Minutes(date) {
+            const minutes = date.getMinutes();
+            const roundedMinutes = Math.ceil(minutes / 5) * 5;
+            const newDate = new Date(date);
+            
+            if (roundedMinutes === 60) {
+                newDate.setHours(newDate.getHours() + 1);
+                newDate.setMinutes(0);
+            } else {
+                newDate.setMinutes(roundedMinutes);
+            }
+            
+            return newDate;
+        }
+
+        function getWeekDates(date) {
+            // Get Tuesday to Monday week
+            const day = date.getDay();
+            const diff = day >= 2 ? date.getDate() - day + 2 : date.getDate() - day - 5;
+            
+            const tuesday = new Date(date);
+            tuesday.setDate(diff);
+            
+            const weekDates = [];
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(tuesday);
+                currentDate.setDate(tuesday.getDate() + i);
+                weekDates.push(currentDate);
+            }
+            
+            return weekDates;
+        }
+
+        function calculateDayStatistics(dayActivities) {
+            const stats = {
+                totalEntries: Object.keys(dayActivities).length,
+                mostFrequent: null,
+                topTasks: []
+            };
+            
+            // Count occurrences of each activity
+            const activityCounts = {};
+            Object.values(dayActivities).forEach(activity => {
+                if (activity.trim()) {
+                    activityCounts[activity] = (activityCounts[activity] || 0) + 1;
+                }
+            });
+            
+            // Find most frequent
+            let maxCount = 0;
+            let mostFrequent = null;
+            
+            Object.entries(activityCounts).forEach(([activity, count]) => {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostFrequent = activity;
+                }
+            });
+            
+            stats.mostFrequent = mostFrequent;
+            
+            // Calculate top 6 tasks by time spent (5 min per entry)
+            const taskTimes = Object.entries(activityCounts)
+                .map(([activity, count]) => ({
+                    activity,
+                    time: count * 5,
+                    count
+                }))
+                .sort((a, b) => b.time - a.time)
+                .slice(0, 6);
+            
+            stats.topTasks = taskTimes;
+            
+            return stats;
+        }
+    </script>
+</body>
+</html>
